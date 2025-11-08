@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Collaborative Canvas</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .header {
+            background: white;
+            border-bottom: 1px solid #e0e0e0;
+            padding: 1rem 1.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            color: #333;
+        }
+
+        .users-list {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .user-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .user-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .toolbar {
+            background: white;
+            border-bottom: 1px solid #e0e0e0;
+            padding: 0.75rem 1.5rem;
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .tool-group {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .divider {
+            width: 1px;
+            height: 32px;
+            background: #e0e0e0;
+        }
+
+        .tool-btn {
+            padding: 0.5rem;
+            border: 2px solid transparent;
+            border-radius: 8px;
+            background: #f5f5f5;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .tool-btn:hover {
+            background: #e8e8e8;
+        }
+
+        .tool-btn.active {
+            background: #2563eb;
+            border-color: #2563eb;
+        }
+
+        .tool-btn svg {
+            width: 20px;
+            height: 20px;
+            stroke: #333;
+        }
+
+        .tool-btn.active svg {
+            stroke: white;
+        }
+
+        .tool-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .tool-btn:disabled:hover {
+            background: #f5f5f5;
+        }
+
+        .color-picker {
+            width: 40px;
+            height: 40px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .size-control {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .size-control label {
+            font-size: 0.9rem;
+            color: #666;
+            font-weight: 500;
+        }
+
+        .size-slider {
+            width: 120px;
+        }
+
+        .size-value {
+            font-size: 0.85rem;
+            color: #666;
+            min-width: 35px;
+        }
+
+        .canvas-container {
+            flex: 1;
+            padding: 1.5rem;
+            overflow: hidden;
+        }
+
+        .canvas-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        #canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+
+        .remote-cursor {
+            position: absolute;
+            pointer-events: none;
+            z-index: 10;
+            display: none;
+        }
+
+        .cursor-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .cursor-label {
+            margin-top: 4px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: white;
+            white-space: nowrap;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .status-bar {
+            background: white;
+            border-top: 1px solid #e0e0e0;
+            padding: 0.75rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            color: #666;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.disconnected {
+            background: #ef4444;
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-content">
+                <h1>🎨 Collaborative Canvas</h1>
+                <div class="users-list">
+                    <span style="color: #666; font-size: 0.9rem;">👥 Online:</span>
+                    <div id="usersList"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="toolbar">
+            <div class="tool-group">
+                <button class="tool-btn active" id="brushBtn" title="Brush (B)">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+                    </svg>
+                </button>
+                <button class="tool-btn" id="eraserBtn" title="Eraser (E)">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="tool-group">
+                <label style="font-size: 0.9rem; color: #666; font-weight: 500;">Color:</label>
+                <input type="color" id="colorPicker" class="color-picker" value="#000000">
+            </div>
+
+            <div class="size-control">
+                <label>Size:</label>
+                <input type="range" id="sizeSlider" class="size-slider" min="1" max="30" value="3">
+                <span class="size-value" id="sizeValue">3px</span>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="tool-group">
+                <button class="tool-btn" id="undoBtn" title="Undo (Ctrl+Z)" disabled>
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
+                    </svg>
+                </button>
+                <button class="tool-btn" id="redoBtn" title="Redo (Ctrl+Y)" disabled>
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 10h-10a8 8 0 00-8 8v2m18-10l-6 6m6-6l-6-6"/>
+                    </svg>
+                </button>
+                <button class="tool-btn" id="clearBtn" title="Clear Canvas" style="background: #fee; border-color: #fcc;">
+                    <svg fill="none" stroke="#dc2626" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <div class="canvas-container">
+            <div class="canvas-wrapper">
+                <canvas id="canvas"></canvas>
+                <div id="cursors"></div>
+            </div>
+        </div>
+
+        <div class="status-bar">
+            <div class="connection-status">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="connectionStatus">Connecting...</span>
+            </div>
+            <div>
+                <span id="operationsCount">Operations: 0 | Position: 0</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    
+    <script>
+        const CONFIG = {
+            WS_URL: window.location.origin,
+            USER_COLORS: ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE'],
+            THROTTLE_MS: 16,
+            MAX_POINTS_PER_BATCH: 50
+        };
+
+        function generateId() {
+            return `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        }
+
+        function throttle(func, wait) {
+            let timeout;
+            let lastRan;
+            return function(...args) {
+                if (!lastRan) {
+                    func.apply(this, args);
+                    lastRan = Date.now();
+                } else {
+                    clearTimeout(timeout);
+                    timeout = setTimeout(() => {
+                        if ((Date.now() - lastRan) >= wait) {
+                            func.apply(this, args);
+                            lastRan = Date.now();
+                        }
+                    }, wait - (Date.now() - lastRan));
+                }
+            };
+        }
+
+        class DrawingOperation {
+            constructor(type, data, userId, timestamp = Date.now()) {
+                this.id = generateId();
+                this.type = type;
+                this.data = data;
+                this.userId = userId;
+                this.timestamp = timestamp;
+            }
+        }
+
+        class CanvasManager {
+            constructor(canvas) {
+                this.canvas = canvas;
+                this.ctx = canvas.getContext('2d', { willReadFrequently: false });
+                this.setupCanvas();
+                this.operations = [];
+                this.currentIndex = -1;
+            }
+
+            setupCanvas() {
+                const rect = this.canvas.getBoundingClientRect();
+                this.canvas.width = rect.width * window.devicePixelRatio;
+                this.canvas.height = rect.height * window.devicePixelRatio;
+                this.ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+                this.ctx.lineCap = 'round';
+                this.ctx.lineJoin = 'round';
+            }
+
+            getPoint(e) {
+                const rect = this.canvas.getBoundingClientRect();
+                return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            }
+
+            drawPath(pathData) {
+                const { points, color, size, tool } = pathData;
+                this.ctx.strokeStyle = color;
+                this.ctx.lineWidth = size;
+                this.ctx.globalCompositeOperation = tool === 'eraser' ? 'destination-out' : 'source-over';
+                this.ctx.beginPath();
+                if (points.length > 0) {
+                    this.ctx.moveTo(points[0].x, points[0].y);
+                    for (let i = 1; i < points.length; i++) {
+                        this.ctx.lineTo(points[i].x, points[i].y);
+                    }
+                    this.ctx.stroke();
+                }
+            }
+
+            addOperation(operation) {
+                this.operations = this.operations.slice(0, this.currentIndex + 1);
+                this.operations.push(operation);
+                this.currentIndex = this.operations.length - 1;
+                this.updateUI();
+            }
+
+            redrawAll() {
+                this.clear();
+                const opsToRender = this.operations.slice(0, this.currentIndex + 1);
+                opsToRender.forEach(op => { if (op.type === 'draw') this.drawPath(op.data); });
+            }
+
+            undo() {
+                if (this.currentIndex >= 0) {
+                    this.currentIndex--;
+                    this.redrawAll();
+                    this.updateUI();
+                    return true;
+                }
+                return false;
+            }
+
+            redo() {
+                if (this.currentIndex < this.operations.length - 1) {
+                    this.currentIndex++;
+                    this.redrawAll();
+                    this.updateUI();
+                    return true;
+                }
+                return false;
+            }
+
+            clear() {
+                const rect = this.canvas.getBoundingClientRect();
+                this.ctx.clearRect(0, 0, rect.width, rect.height);
+            }
+
+            clearAll() {
+                this.clear();
+                this.operations = [];
+                this.currentIndex = -1;
+                this.updateUI();
+            }
+
+            updateUI() {
+                document.getElementById('operationsCount').textContent = `Operations: ${this.operations.length} | Position: ${this.currentIndex + 1}`;
+                document.getElementById('undoBtn').disabled = this.currentIndex < 0;
+                document.getElementById('redoBtn').disabled = this.currentIndex >= this.operations.length - 1;
+            }
+        }
+
+        class WebSocketClient {
+            constructor(userId) {
+                this.userId = userId;
+                this.socket = null;
+                this.handlers = {};
+                this.connected = false;
+            }
+
+            connect() {
+                console.log('🔌 Connecting to server...');
+                this.socket = io(CONFIG.WS_URL);
+                
+                this.socket.on('connect', () => {
+                    console.log('✅ Connected to server:', this.socket.id);
+                    this.connected = true;
+                    this.userId = this.socket.id;
+                    this.updateConnectionStatus(true);
+                });
+                
+                this.socket.on('disconnect', (reason) => {
+                    console.log('❌ Disconnected from server:', reason);
+                    this.connected = false;
+                    this.updateConnectionStatus(false);
+                });
+
+                this.socket.on('connect_error', (error) => {
+                    console.error('🔴 Connection error:', error);
+                    this.updateConnectionStatus(false);
+                });
+                
+                this.socket.on('init-state', (data) => this.trigger('init-state', data));
+                this.socket.on('user-joined', (data) => this.trigger('user-joined', data));
+                this.socket.on('user-left', (data) => this.trigger('user-left', data));
+                this.socket.on('draw', (data) => this.trigger('draw', data));
+                this.socket.on('cursor-move', (data) => this.trigger('cursor-move', data));
+                this.socket.on('undo', (data) => this.trigger('undo', data));
+                this.socket.on('redo', (data) => this.trigger('redo', data));
+                this.socket.on('clear', (data) => this.trigger('clear', data));
+            }
+
+            on(event, handler) { this.handlers[event] = handler; }
+
+            emit(event, data) {
+                if (this.socket && this.connected) {
+                    this.socket.emit(event, data);
+                }
+            }
+
+            trigger(event, data) {
+                if (this.handlers[event]) this.handlers[event](data);
+            }
+
+            updateConnectionStatus(connected) {
+                const statusDot = document.getElementById('statusDot');
+                const statusText = document.getElementById('connectionStatus');
+                if (connected) {
+                    statusDot.classList.remove('disconnected');
+                    statusText.textContent = 'Connected';
+                } else {
+                    statusDot.classList.add('disconnected');
+                    statusText.textContent = 'Disconnected';
+                }
+            }
+        }
+
+        class UserManager {
+            constructor() {
+                this.users = new Map();
+                this.cursors = new Map();
+            }
+
+            addUser(userId, data = {}) {
+                const color = data.color || CONFIG.USER_COLORS[this.users.size % CONFIG.USER_COLORS.length];
+                this.users.set(userId, {
+                    id: userId,
+                    color: color,
+                    name: data.name || `User ${this.users.size + 1}`
+                });
+                this.render();
+            }
+
+            removeUser(userId) {
+                this.users.delete(userId);
+                this.removeCursor(userId);
+                this.render();
+            }
+
+            updateCursor(userId, position) {
+                if (!this.users.has(userId)) return;
+                let cursor = this.cursors.get(userId);
+                if (!cursor) {
+                    cursor = this.createCursor(userId);
+                    this.cursors.set(userId, cursor);
+                }
+                cursor.style.left = `${position.x}px`;
+                cursor.style.top = `${position.y}px`;
+                cursor.style.display = 'block';
+                clearTimeout(cursor.hideTimeout);
+                cursor.hideTimeout = setTimeout(() => cursor.style.display = 'none', 3000);
+            }
+
+            createCursor(userId) {
+                const user = this.users.get(userId);
+                const cursor = document.createElement('div');
+                cursor.className = 'remote-cursor';
+                cursor.innerHTML = `
+                    <div class="cursor-dot" style="background: ${user.color};"></div>
+                    <div class="cursor-label" style="background: ${user.color};">${user.name}</div>
+                `;
+                document.getElementById('cursors').appendChild(cursor);
+                return cursor;
+            }
+
+            removeCursor(userId) {
+                const cursor = this.cursors.get(userId);
+                if (cursor) {
+                    cursor.remove();
+                    this.cursors.delete(userId);
+                }
+            }
+
+            render() {
+                const container = document.getElementById('usersList');
+                container.innerHTML = '';
+                this.users.forEach(user => {
+                    const badge = document.createElement('div');
+                    badge.className = 'user-badge';
+                    badge.style.background = `${user.color}20`;
+                    badge.style.color = user.color;
+                    badge.innerHTML = `
+                        <div class="user-dot" style="background: ${user.color};"></div>
+                        ${user.name}
+                    `;
+                    container.appendChild(badge);
+                });
+            }
+        }
+
+        class CollaborativeCanvas {
+            constructor() {
+                this.userId = generateId();
+                this.canvas = document.getElementById('canvas');
+                this.canvasManager = new CanvasManager(this.canvas);
+                this.wsClient = new WebSocketClient(this.userId);
+                this.userManager = new UserManager();
+                this.isDrawing = false;
+                this.currentPath = [];
+                this.tool = 'brush';
+                this.color = '#000000';
+                this.size = 3;
+                this.init();
+            }
+
+            init() {
+                this.setupEventListeners();
+                this.setupWebSocket();
+                this.wsClient.connect();
+                setTimeout(() => this.userManager.addUser(this.wsClient.userId, { name: 'You' }), 500);
+            }
+
+            setupEventListeners() {
+                this.canvas.addEventListener('mousedown', this.startDrawing.bind(this));
+                this.canvas.addEventListener('mousemove', throttle(this.draw.bind(this), CONFIG.THROTTLE_MS));
+                this.canvas.addEventListener('mouseup', this.stopDrawing.bind(this));
+                this.canvas.addEventListener('mouseleave', this.stopDrawing.bind(this));
+                document.getElementById('brushBtn').addEventListener('click', () => this.setTool('brush'));
+                document.getElementById('eraserBtn').addEventListener('click', () => this.setTool('eraser'));
+                document.getElementById('colorPicker').addEventListener('change', (e) => this.color = e.target.value);
+                document.getElementById('sizeSlider').addEventListener('input', (e) => {
+                    this.size = parseInt(e.target.value);
+                    document.getElementById('sizeValue').textContent = `${this.size}px`;
+                });
+                document.getElementById('undoBtn').addEventListener('click', () => {
+                    if (this.canvasManager.undo()) this.wsClient.emit('undo', { timestamp: Date.now() });
+                });
+                document.getElementById('redoBtn').addEventListener('click', () => {
+                    if (this.canvasManager.redo()) this.wsClient.emit('redo', { timestamp: Date.now() });
+                });
+                document.getElementById('clearBtn').addEventListener('click', () => {
+                    if (confirm('Clear the entire canvas? This will affect all users.')) {
+                        this.canvasManager.clearAll();
+                        this.wsClient.emit('clear', {});
+                    }
+                });
+                document.addEventListener('keydown', (e) => {
+                    if (e.ctrlKey || e.metaKey) {
+                        if (e.key === 'z') { e.preventDefault(); document.getElementById('undoBtn').click(); }
+                        else if (e.key === 'y') { e.preventDefault(); document.getElementById('redoBtn').click(); }
+                    } else if (e.key === 'b' || e.key === 'B') this.setTool('brush');
+                    else if (e.key === 'e' || e.key === 'E') this.setTool('eraser');
+                });
+                window.addEventListener('resize', () => {
+                    this.canvasManager.setupCanvas();
+                    this.canvasManager.redrawAll();
+                });
+            }
+
+            setupWebSocket() {
+                this.wsClient.on('init-state', (data) => {
+                    if (data.users) {
+                        data.users.forEach(user => {
+                            if (user.userId !== this.wsClient.userId) this.userManager.addUser(user.userId, user);
+                        });
+                    }
+                    if (data.operations && data.operations.length > 0) {
+                        this.canvasManager.operations = data.operations;
+                        this.canvasManager.currentIndex = data.operations.length - 1;
+                        this.canvasManager.redrawAll();
+                    }
+                });
+                this.wsClient.on('user-joined', (data) => {
+                    if (data.userId !== this.wsClient.userId) this.userManager.addUser(data.userId, data);
+                });
+                this.wsClient.on('user-left', (data) => this.userManager.removeUser(data.userId));
+                this.wsClient.on('draw', (data) => {
+                    if (data.userId !== this.wsClient.userId) {
+                        const operation = new DrawingOperation('draw', data.pathData, data.userId, data.timestamp);
+                        this.canvasManager.addOperation(operation);
+                        this.canvasManager.drawPath(data.pathData);
+                    }
+                });
+                this.wsClient.on('cursor-move', (data) => {
+                    if (data.userId !== this.wsClient.userId) this.userManager.updateCursor(data.userId, data.position);
+                });
+                this.wsClient.on('undo', (data) => {
+                    if (data.userId !== this.wsClient.userId) this.canvasManager.undo();
+                });
+                this.wsClient.on('redo', (data) => {
+                    if (data.userId !== this.wsClient.userId) this.canvasManager.redo();
+                });
+                this.wsClient.on('clear', (data) => {
+                    if (data.userId !== this.wsClient.userId) this.canvasManager.clearAll();
+                });
+            }
+
+            setTool(tool) {
+                this.tool = tool;
+                document.getElementById('brushBtn').classList.toggle('active', tool === 'brush');
+                document.getElementById('eraserBtn').classList.toggle('active', tool === 'eraser');
+            }
+
+            startDrawing(e) {
+                this.isDrawing = true;
+                const point = this.canvasManager.getPoint(e);
+                this.currentPath = [point];
+            }
+
+            draw(e) {
+                const point = this.canvasManager.getPoint(e);
+                this.wsClient.emit('cursor-move', { userId: this.wsClient.userId, position: point });
+                if (!this.isDrawing) return;
+                this.currentPath.push(point);
+                const pathData = { points: this.currentPath.slice(-2), color: this.color, size: this.size, tool: this.tool };
+                this.canvasManager.drawPath(pathData);
+            }
+
+            stopDrawing() {
+                if (!this.isDrawing) return;
+                this.isDrawing = false;
+                if (this.currentPath.length > 0) {
+                    const pathData = { points: this.currentPath, color: this.color, size: this.size, tool: this.tool };
+                    const operation = new DrawingOperation('draw', pathData, this.wsClient.userId);
+                    this.canvasManager.addOperation(operation);
+                    this.wsClient.emit('draw', { userId: this.wsClient.userId, pathData: pathData, timestamp: operation.timestamp });
+                    this.currentPath = [];
+                }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('🎨 Initializing Collaborative Canvas...');
+            new CollaborativeCanvas();
+        });
+    </script>
+</body>
+</html>
