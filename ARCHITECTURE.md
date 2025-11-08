@@ -177,19 +177,6 @@ function redrawCanvas() {
 }
 ```
 
-### Trade-offs
-
-✅ **Advantages:**
-- Simple to implement and reason about
-- Guaranteed consistency across clients
-- No complex conflict resolution needed
-- Works like traditional editor undo/redo
-
-⚠️ **Limitations:**
-- Cannot undo specific user's actions
-- Undo affects everyone (intentional design)
-- Full redraw on undo/redo (performance cost)
-
 ## 🎯 Conflict Resolution
 
 ### Scenario: Simultaneous Drawing
@@ -385,16 +372,11 @@ Client (Optimistic UI)
 - Load balancer: ~$30/month
 - **Total**: ~$230/month for 1000 concurrent users
 
-## 🔍 Key Insights
 
-1. **Drawing is forgiving**: Small inconsistencies aren't noticed by users
-2. **Undo/redo is hard**: Most complex part of the system
-3. **Throttling is essential**: Raw mouse events would overwhelm the network
-4. **Optimistic UI matters**: Local drawing must be instant
-5. **Simplicity wins**: Avoided complex CRDTs for a simpler solution
 
 ---
 
-**Last Updated**: November 2024
-**Author**: [Your Name]
+**Last Updated**: 8th November 2024
+**Author**: Srishti
+
 **Time Investment**: 11 hours
